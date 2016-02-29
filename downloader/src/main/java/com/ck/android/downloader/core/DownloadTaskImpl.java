@@ -4,23 +4,25 @@ package com.ck.android.downloader.core;
 import android.os.Process;
 import android.text.TextUtils;
 
+import com.ck.android.common.utils.android.LogUtil;
 import com.ck.android.common.utils.java.IOUtil;
+import com.ck.android.downloader.Constants;
 import com.ck.android.downloader.DownloadException;
 import com.ck.android.downloader.DownloadInfo;
 import com.ck.android.downloader.architecture.DownloadStatus;
 import com.ck.android.downloader.architecture.DownloadTask;
 import com.ck.android.downloader.db.ThreadInfo;
-import com.ck.android.downloader.utils.OkhttpUtil;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.Map;
-
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Created by Aspsine on 2015/7/27.
@@ -90,11 +92,17 @@ public abstract class DownloadTaskImpl implements DownloadTask {
         try {
             mStatus = DownloadStatus.STATUS_PROGRESS;
             executeDownload();
+
+            if (checkPausedOrCanceled())
+                return;
+
             synchronized (mOnDownloadListener) {
                 mStatus = DownloadStatus.STATUS_COMPLETED;
                 mOnDownloadListener.onDownloadCompleted();
             }
         } catch (DownloadException e) {
+            LogUtil.getInstance().d("catch DownloadException:DownloadStatus:" + e.getErrorMessage());
+
             handleDownloadException(e);
         }
     }
@@ -109,6 +117,8 @@ public abstract class DownloadTaskImpl implements DownloadTask {
                 break;
             case DownloadStatus.STATUS_PAUSED:
                 synchronized (mOnDownloadListener) {
+
+                    LogUtil.getInstance().d("handleDownloadException:DownloadStatus.STATUS_PAUSED");
                     mStatus = DownloadStatus.STATUS_PAUSED;
                     mOnDownloadListener.onDownloadPaused();
                 }
@@ -124,122 +134,104 @@ public abstract class DownloadTaskImpl implements DownloadTask {
         }
     }
 
-//    private void executeDownload() throws DownloadException {
-//        final URL url;
-//        try {
-//            url = new URL(mThreadInfo.getUri());
-//        } catch (MalformedURLException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
-//        }
-//
-//        HttpURLConnection httpConnection = null;
-//        try {
-//            httpConnection = (HttpURLConnection) url.openConnection();
-//            httpConnection.setConnectTimeout(Constants.HTTP.CONNECT_TIME_OUT);
-//            httpConnection.setReadTimeout(Constants.HTTP.READ_TIME_OUT);
-//            httpConnection.setRequestMethod(Constants.HTTP.GET);
-//            setHttpHeader(getHttpHeaders(mThreadInfo), httpConnection);
-//            final int responseCode = httpConnection.getResponseCode();
-//            if (responseCode == getResponseCode()) {
-//                transferData(httpConnection);
-//            } else {
-//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
-//            }
-//        } catch (ProtocolException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Protocol error", e);
-//        } catch (IOException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "IO error", e);
-//        } finally {
-//            if (httpConnection != null) {
-//                httpConnection.disconnect();
-//            }
-//        }
-//
-//    }
 
     private void executeDownload() throws DownloadException {
-
-        OkHttpClient okHttpClient = OkhttpUtil.getOkHttpClient();
-
-
-        Request.Builder builder = new Request.Builder().url(mThreadInfo.getUri());
-
-        setHttpHeader(getHttpHeaders(mThreadInfo),builder);
-
-
-        Request request = builder.build();
-        Response response = null;
-
+        final URL url;
         try {
-            response = okHttpClient.newCall(request).execute();
-            if (response == null) {
-                throw new DownloadException(DownloadStatus.STATUS_FAILED, "response==null");
-
-            }
-
-            final int responseCode = response.code();
-
-
-            if (responseCode == getResponseCode()) {
-                transferData(response);
-            } else {
-                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
-            }
-
-
-        } catch (IOException e) {
-            e.printStackTrace();
+            url = new URL(mThreadInfo.getUri());
+        } catch (MalformedURLException e) {
             throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
         }
 
+        HttpURLConnection httpConnection = null;
+        try {
+            httpConnection = (HttpURLConnection) url.openConnection();
+            httpConnection.setConnectTimeout(Constants.HTTP.CONNECT_TIME_OUT);
+            httpConnection.setReadTimeout(Constants.HTTP.READ_TIME_OUT);
+            httpConnection.setRequestMethod(Constants.HTTP.GET);
+            setHttpHeader(getHttpHeaders(mThreadInfo), httpConnection);
+            final int responseCode = httpConnection.getResponseCode();
+            if (responseCode == getResponseCode()) {
+                transferData(httpConnection);
+            } else {
+                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
+            }
+        } catch (ProtocolException e) {
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Protocol error", e);
+        } catch (IOException e) {
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "IO error", e);
+        } finally {
+            if (httpConnection != null) {
+                httpConnection.disconnect();
+            }
+        }
+
     }
 
+//    private void executeDownload() throws DownloadException {
+//
+//        OkHttpClient okHttpClient = OkhttpUtil.getOkHttpClient();
+//
+//
+//        Request.Builder builder = new Request.Builder().url(mThreadInfo.getUri());
+//
+//        setHttpHeader(getHttpHeaders(mThreadInfo),builder);
+//
+//
+//        Request request = builder.build();
+//        Response response = null;
+//
+//        try {
+//            response = okHttpClient.newCall(request).execute();
+//            if (response == null) {
+//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "response==null");
+//
+//            }
+//
+//            final int responseCode = response.code();
+//
+//
+//            if (responseCode == getResponseCode()) {
+//                transferData(response);
+//            } else {
+//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
+//            }
+//
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
+//        }
+//
+//    }
 
-    private void setHttpHeader(Map<String, String> headers, Request.Builder builder) {
+
+//    private void setHttpHeader(Map<String, String> headers, Request.Builder builder) {
+//        if (headers != null) {
+//            for (String key : headers.keySet()) {
+//                builder.addHeader(key, headers.get(key));
+//            }
+//        }
+//    }
+
+
+    private void setHttpHeader(Map<String, String> headers, URLConnection connection) {
         if (headers != null) {
             for (String key : headers.keySet()) {
-                builder.addHeader(key, headers.get(key));
+                connection.setRequestProperty(key, headers.get(key));
             }
         }
     }
 
-
-//    private void setHttpHeader(Map<String, String> headers, URLConnection connection) {
-//        if (headers != null) {
-//            for (String key : headers.keySet()) {
-//                connection.setRequestProperty(key, headers.get(key));
-//            }
-//        }
-//    }
-
-    //    private void transferData(HttpURLConnection httpConnection) throws DownloadException {
-//        InputStream inputStream = null;
-//        RandomAccessFile raf = null;
-//        try {
-//            try {
-//                inputStream = httpConnection.getInputStream();
-//            } catch (IOException e) {
-//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "http get inputStream error", e);
-//            }
-//            final long offset = mThreadInfo.getStart() + mThreadInfo.getFinished();
-//            try {
-//                raf = getFile(mDownloadInfo.getDir(), mDownloadInfo.getName(), offset);
-//            } catch (IOException e) {
-//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "File error", e);
-//            }
-//            transferData(inputStream, raf);
-//        } finally {
-//            IOUtil.close(inputStream);
-//            IOUtil.close(raf);
-//        }
-//    }
-    private void transferData(Response response) throws DownloadException {
+    private void transferData(HttpURLConnection httpConnection) throws DownloadException {
         InputStream inputStream = null;
         RandomAccessFile raf = null;
         try {
-
-            inputStream = response.body().byteStream();
-
+            try {
+                inputStream = httpConnection.getInputStream();
+            } catch (IOException e) {
+                throw new DownloadException(DownloadStatus.STATUS_FAILED, "http get inputStream error", e);
+            }
             final long offset = mThreadInfo.getStart() + mThreadInfo.getFinished();
             try {
                 raf = getFile(mDownloadInfo.getDir(), mDownloadInfo.getName(), offset);
@@ -252,12 +244,33 @@ public abstract class DownloadTaskImpl implements DownloadTask {
             IOUtil.close(raf);
         }
     }
+//    private void transferData(Response response) throws DownloadException {
+//        InputStream inputStream = null;
+//        RandomAccessFile raf = null;
+//        try {
+//
+//            inputStream = response.body().byteStream();
+//
+//            final long offset = mThreadInfo.getStart() + mThreadInfo.getFinished();
+//            try {
+//                raf = getFile(mDownloadInfo.getDir(), mDownloadInfo.getName(), offset);
+//            } catch (IOException e) {
+//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "File error", e);
+//            }
+//            transferData(inputStream, raf);
+//        } finally {
+//            IOUtil.close(inputStream);
+//            IOUtil.close(raf);
+//        }
+//    }
 
 
     private void transferData(InputStream inputStream, RandomAccessFile raf) throws DownloadException {
         final byte[] buffer = new byte[1024 * 16];
         while (true) {
-            checkPausedOrCanceled();
+
+            if (checkPausedOrCanceled())
+                return;
             int len = -1;
             try {
                 len = inputStream.read(buffer);
@@ -272,6 +285,10 @@ public abstract class DownloadTaskImpl implements DownloadTask {
             try {
                 raf.write(buffer, 0, len);
                 mThreadInfo.setFinished(mThreadInfo.getFinished() + len);
+
+                LogUtil.getInstance().d("filesize:" + raf.length() + ";" + mDownloadInfo.getName() + mThreadInfo.getId() + ":finished" + (mThreadInfo.getFinished() + len));
+
+
                 synchronized (mOnDownloadListener) {
                     mDownloadInfo.setFinished(mDownloadInfo.getFinished() + len);
                     mOnDownloadListener.onDownloadProgress(mDownloadInfo.getFinished(), mDownloadInfo.getLength());
@@ -283,15 +300,30 @@ public abstract class DownloadTaskImpl implements DownloadTask {
     }
 
 
-    private void checkPausedOrCanceled() throws DownloadException {
+    private boolean checkPausedOrCanceled() throws DownloadException {
         if (mCommend == DownloadStatus.STATUS_CANCELED) {
             // cancel
-            throw new DownloadException(DownloadStatus.STATUS_CANCELED, "Download canceled!");
+//            throw new DownloadException(DownloadStatus.STATUS_CANCELED, "Download canceled!");
+
+            handleDownloadException(new DownloadException(DownloadStatus.STATUS_CANCELED, "Download canceled!"));
+
+            return true;
         } else if (mCommend == DownloadStatus.STATUS_PAUSED) {
+
+            LogUtil.getInstance().d("mCommend == DownloadStatus.STATUS_PAUSED");
             // pause
             updateDB(mThreadInfo);
-            throw new DownloadException(DownloadStatus.STATUS_PAUSED, "Download paused!");
+//            throw new DownloadException(DownloadStatus.STATUS_PAUSED, "Download paused!");
+
+//            handleDownloadException(new DownloadException(DownloadStatus.STATUS_PAUSED, "Download paused!"));
+
+            handleDownloadException(new DownloadException(DownloadStatus.STATUS_PAUSED, "Download paused!"));
+            return true;
         }
+
+        return false;
+
+
     }
 
 

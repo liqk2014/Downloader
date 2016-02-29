@@ -1,6 +1,7 @@
 package com.ck.android.downloader.core;
 
 
+import com.ck.android.common.utils.android.LogUtil;
 import com.ck.android.downloader.DownloadConfiguration;
 import com.ck.android.downloader.DownloadException;
 import com.ck.android.downloader.DownloadInfo;
@@ -147,6 +148,8 @@ public class DownloaderImpl implements Downloader, ConnectTask.OnConnectListener
     @Override
     public void onDownloadCompleted() {
         if (isAllComplete()) {
+            LogUtil.getInstance().d("complete");
+
             deleteFromDB();
             mStatus = DownloadStatus.STATUS_COMPLETED;
             mResponse.onDownloadCompleted();
@@ -157,6 +160,7 @@ public class DownloaderImpl implements Downloader, ConnectTask.OnConnectListener
     @Override
     public void onDownloadPaused() {
         if (isAllPaused()) {
+            LogUtil.getInstance().d("pause");
             mStatus = DownloadStatus.STATUS_PAUSED;
             mResponse.onDownloadPaused();
             onDestroy();

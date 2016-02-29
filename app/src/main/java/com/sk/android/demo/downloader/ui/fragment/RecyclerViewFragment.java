@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.ck.android.common.utils.android.LogUtil;
 import com.ck.android.downloader.CallBack;
 import com.ck.android.downloader.DownloadException;
 import com.ck.android.downloader.DownloadInfo;
@@ -177,6 +178,16 @@ public class RecyclerViewFragment extends Fragment implements OnItemClickListene
         @Override
         public void onCompleted() {
             mAppInfo.setStatus(AppInfo.STATUS_COMPLETE);
+            LogUtil.getInstance().d("onCompleted");
+
+
+//            long start = System.currentTimeMillis();
+//
+//            SilentInstallUtil.installSilent(getContext(),mDownloadDir+"/"+mAppInfo.getName()+".apk");
+//
+//
+//            LogUtil.getInstance().d("install total Time:"+(System.currentTimeMillis()-start));
+
             File apk = new File(mDownloadDir, mAppInfo.getName() + ".apk");
             if (apk.isFile() && apk.exists()) {
                 String packageName = Utils.getApkFilePackage(getActivity(), apk);

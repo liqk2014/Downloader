@@ -1,6 +1,9 @@
 package com.ck.android.common.utils.android;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.widget.Toast;
 
 /**
@@ -9,97 +12,84 @@ import android.widget.Toast;
  */
 public class ToastUtil {
 
-    private Toast   mToast;
-    private Context context;
 
-    public ToastUtil(Context context) {
-        this.context = context.getApplicationContext();
-    }
+    private static InternalHandler sHandler;
 
-    public Toast getSingletonToast(int resId) {
-        if (mToast == null) {
-            mToast = Toast.makeText(context, resId, Toast.LENGTH_SHORT);
-        }else{
-            mToast.setText(resId);
+
+    private static class InternalHandler extends Handler {
+        public InternalHandler() {
+            super(Looper.getMainLooper());
         }
-        return mToast;
-    }
 
-    public Toast getSingletonToast(String text) {
-        if (mToast == null) {
-            mToast = Toast.makeText(context, text, Toast.LENGTH_SHORT);
-        }else{
-            mToast.setText(text);
+        @Override
+        public void handleMessage(Message msg) {
+
+
         }
-        return mToast;
     }
 
-    public Toast getSingleLongToast(int resId) {
-        if (mToast == null) {
-            mToast = Toast.makeText(context, resId, Toast.LENGTH_LONG);
-        }else{
-            mToast.setText(resId);
+
+    private static Handler getHandler() {
+        synchronized (ToastUtil.class) {
+            if (sHandler == null) {
+                sHandler = new InternalHandler();
+            }
+            return sHandler;
         }
-        return mToast;
-    }
-
-    public Toast getSingleLongToast(String text) {
-        if (mToast == null) {
-            mToast = Toast.makeText(context, text, Toast.LENGTH_LONG);
-        }else{
-            mToast.setText(text);
-        }
-        return mToast;
-    }
-
-    public Toast getToast(int resId) {
-        return Toast.makeText(context, resId, Toast.LENGTH_SHORT);
-    }
-
-    public Toast getToast(String text) {
-        return Toast.makeText(context, text, Toast.LENGTH_SHORT);
-    }
-
-    public Toast getLongToast(int resId) {
-        return Toast.makeText(context, resId, Toast.LENGTH_LONG);
-    }
-
-    public Toast getLongToast(String text) {
-        return Toast.makeText(context, text, Toast.LENGTH_LONG);
-    }
-
-    public void showSingletonToast(int resId) {
-        getSingletonToast(resId).show();
     }
 
 
-    public void showSingletonToast(String text) {
-        getSingletonToast(text).show();
+    public static void showShortToast(final Context context, final String text) {
+
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+
+                Toast.makeText(context, text, Toast.LENGTH_SHORT).show();
+
+            }
+        });
+
     }
 
-    public void showSingleLongToast(int resId) {
-        getSingleLongToast(resId).show();
+    public static void showShortToast(final Context context, final int resourceId) {
+
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+
+                Toast.makeText(context, resourceId, Toast.LENGTH_SHORT).show();
+
+            }
+        });
+
     }
 
+    public static void showLongToast(final Context context, final String text) {
 
-    public void showSingleLongToast(String text) {
-        getSingleLongToast(text).show();
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+
+                Toast.makeText(context, text, Toast.LENGTH_LONG).show();
+
+            }
+        });
+
     }
 
-    public void showToast(int resId) {
-        getToast(resId).show();
+    public static void showLongToast(final Context context, final int resourceId) {
+
+        getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+
+                Toast.makeText(context, resourceId, Toast.LENGTH_LONG).show();
+
+            }
+        });
+
     }
 
-    public void showToast(String text) {
-        getToast(text).show();
-    }
-
-    public void showLongToast(int resId) {
-        getLongToast(resId).show();
-    }
-
-    public void showLongToast(String text) {
-        getLongToast(text).show();
-    }
 
 }

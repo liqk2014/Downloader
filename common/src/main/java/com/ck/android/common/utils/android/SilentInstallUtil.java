@@ -6,6 +6,8 @@ import android.content.pm.PackageManager;
 import android.util.Log;
 
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * modify form Trinea
@@ -18,7 +20,7 @@ public class SilentInstallUtil {
      * Installation return code<br/>
      * install success.
      */
-    public static final int INSTALL_SUCCEEDED             = 1;
+    public static final int INSTALL_SUCCEEDED = 1;
     /**
      * Installation return code<br/>
      * the package is already installed.
@@ -236,7 +238,7 @@ public class SilentInstallUtil {
      * Installation return code<br/>
      * other reason
      */
-    public static final int INSTALL_FAILED_OTHER          = -1000000;
+    public static final int INSTALL_FAILED_OTHER = -1000000;
 
     /**
      * Uninstall return code<br/>
@@ -273,9 +275,88 @@ public class SilentInstallUtil {
     /**
      * App installation location flags of android system
      */
-    public static final int APP_INSTALL_AUTO     = 0;
+    public static final int APP_INSTALL_AUTO = 0;
     public static final int APP_INSTALL_INTERNAL = 1;
     public static final int APP_INSTALL_EXTERNAL = 2;
+
+
+    private static ExecutorService mExecutorService;
+
+
+    private static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
+    private static final int CORE_POOL_SIZE = CPU_COUNT + 1;
+    private static final int MAXIMUM_POOL_SIZE = CPU_COUNT * 2 + 1;
+
+
+    static {
+
+        if (mExecutorService == null) {
+            mExecutorService = Executors.newFixedThreadPool(CORE_POOL_SIZE);
+        }
+
+    }
+
+
+    protected static class InstallTask implements Runnable {
+
+        private String filePath;
+
+        private String pmParams;
+
+        private Context context;
+
+
+        public InstallTask(String filePath, String pmParams, Context context) {
+            this.filePath = filePath;
+            this.pmParams = pmParams;
+            this.context = context;
+        }
+
+        @Override
+        public void run() {
+            if (filePath == null || filePath.length() == 0) {
+
+                ToastUtil.showShortToast(context, "INSTALL_FAILED_INVALID_URI");
+//                return INSTALL_FAILED_INVALID_URI;
+            }
+
+            File file = new File(filePath);
+            if (file == null || file.length() <= 0 || !file.exists() || !file.isFile()) {
+//                return INSTALL_FAILED_INVALID_URI;
+                ToastUtil.showShortToast(context, "INSTALL_FAILED_INVALID_URI");
+            }
+            /**
+             * if context is system app, don't need root permission, but should add <uses-permission
+             * android:name="android.permission.INSTALL_PACKAGES" /> in mainfest
+             **/
+            StringBuilder command = new StringBuilder().append("LD_LIBRARY_PATH=/vendor/lib:/system/lib pm install ")
+                    .append(pmParams == null ? "" : pmParams).append(" ").append(filePath.replace(" ", "\\ "));
+            ShellUtil.CommandResult commandResult = ShellUtil.execCommand(command.toString(),
+                    !isSystemApplication(context), true);
+            if (commandResult.responseMsg != null
+                    && (commandResult.responseMsg.contains("Success") || commandResult.responseMsg.contains("success"))) {
+//                return INSTALL_SUCCEEDED;
+
+                ToastUtil.showShortToast(context, commandResult.responseMsg);
+
+            }
+            Log.e(TAG,
+                    new StringBuilder().append("installSilent successMsg:").append(commandResult.responseMsg)
+                            .append(", ErrorMsg:").append(commandResult.errorMsg).toString());
+            ToastUtil.showShortToast(context, commandResult.errorMsg);
+//
+        }
+
+    }
+
+    protected static class unInstallTask implements Runnable {
+
+
+        @Override
+        public void run() {
+
+        }
+    }
 
     /**
      * uninstall package and clear data of app silent by root
@@ -285,7 +366,7 @@ public class SilentInstallUtil {
      * @return
      * @see #uninstallSilent(Context, String, boolean)
      */
-    public int uninstallSilent(Context context, String packageName) {
+    public static int uninstallSilent(Context context, String packageName) {
         return uninstallSilent(context, packageName, false);
     }
 
@@ -307,7 +388,7 @@ public class SilentInstallUtil {
      * <li>{@link #DELETE_FAILED_INVALID_PACKAGE} means package name error</li>
      * <li>{@link #DELETE_FAILED_PERMISSION_DENIED} means permission denied</li>
      */
-    public int uninstallSilent(Context context, String packageName, boolean isKeepData) {
+    public static int uninstallSilent(Context context, String packageName, boolean isKeepData) {
         if (packageName == null || packageName.length() == 0) {
             return DELETE_FAILED_INVALID_PACKAGE;
         }
@@ -349,9 +430,18 @@ public class SilentInstallUtil {
      * @param filePath file path of package
      * @see #installSilent(Context, String, String)
      */
-    public int installSilent(Context context, String filePath) {
-        return installSilent(context, filePath, " -r " + getInstallLocationParams());
+//    public static int installSilent(Context context, String filePath) {
+//        return installSilent(context, filePath, " -r " + getInstallLocationParams());
+//    }
+
+    public static void installSilent(Context context, String filePath) {
+
+        InstallTask installTask = new InstallTask(filePath," -r " + getInstallLocationParams(),context);
+
+        mExecutorService.execute(installTask);
+
     }
+
 
     /**
      * * install package silent by root
@@ -362,7 +452,7 @@ public class SilentInstallUtil {
      * permission, if you are system app.</li>
      * </ul>
      */
-    public int installSilent(Context context, String filePath, String pmParams) {
+    public static int installSilent(Context context, String filePath, String pmParams) {
         if (filePath == null || filePath.length() == 0) {
             return INSTALL_FAILED_INVALID_URI;
         }
@@ -505,7 +595,7 @@ public class SilentInstallUtil {
      *
      * @return APP_INSTALL_AUTO or APP_INSTALL_INTERNAL or APP_INSTALL_EXTERNAL.
      */
-    public int getInstallLocation() {
+    public static int getInstallLocation() {
         ShellUtil.CommandResult commandResult = ShellUtil.execCommand(
                 "LD_LIBRARY_PATH=/vendor/lib:/system/lib pm get-install-location", false, true);
         if (commandResult.result == 0 && commandResult.responseMsg != null && commandResult.responseMsg.length() > 0) {
@@ -523,7 +613,7 @@ public class SilentInstallUtil {
      *
      * @return
      */
-    private String getInstallLocationParams() {
+    private static String getInstallLocationParams() {
         int location = getInstallLocation();
         switch (location) {
             case APP_INSTALL_INTERNAL:
@@ -538,7 +628,7 @@ public class SilentInstallUtil {
      * /**
      * whether packageName is system application
      */
-    public boolean isSystemApplication(Context context) {
+    public static boolean isSystemApplication(Context context) {
         PackageManager packageManager = context.getPackageManager();
         String packageName = context.getPackageName();
         if (packageManager == null || packageName == null || packageName.length() == 0) {

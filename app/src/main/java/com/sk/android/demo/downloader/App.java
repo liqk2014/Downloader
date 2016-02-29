@@ -5,6 +5,7 @@ import android.content.Context;
 
 import com.ck.android.downloader.DownloadConfiguration;
 import com.ck.android.downloader.DownloadManager;
+import com.facebook.stetho.Stetho;
 
 /**
  * Created by Aspsine on 2015/4/20.
@@ -16,6 +17,9 @@ public class App extends Application {
     public void onCreate() {
         super.onCreate();
         sContext = getApplicationContext();
+
+        Stetho.initializeWithDefaults(this);
+
         initDownloader();
 //        CrashHandler.getInstance(sContext);
     }

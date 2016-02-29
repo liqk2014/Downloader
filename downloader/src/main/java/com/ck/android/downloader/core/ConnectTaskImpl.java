@@ -1,18 +1,18 @@
 package com.ck.android.downloader.core;
 
 import android.os.Process;
+import android.text.TextUtils;
 
+import com.ck.android.downloader.Constants;
 import com.ck.android.downloader.DownloadException;
 import com.ck.android.downloader.architecture.ConnectTask;
 import com.ck.android.downloader.architecture.DownloadStatus;
-import com.ck.android.downloader.utils.OkhttpUtil;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
-
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
 
 /**
  * Created by Aspsine on 2015/7/20.
@@ -66,75 +66,75 @@ public class ConnectTaskImpl implements ConnectTask {
         }
     }
 
-//    private void executeConnection() throws DownloadException {
-//        mStartTime = System.currentTimeMillis();
-//        HttpURLConnection httpConnection = null;
-//        final URL url;
-//        try {
-//            url = new URL(mUri);
-//        } catch (MalformedURLException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
-//        }
-//        try {
-//            httpConnection = (HttpURLConnection) url.openConnection();
-//            httpConnection.setConnectTimeout(Constants.HTTP.CONNECT_TIME_OUT);
-//            httpConnection.setReadTimeout(Constants.HTTP.READ_TIME_OUT);
-//            httpConnection.setRequestMethod(Constants.HTTP.GET);
-//            httpConnection.setRequestProperty("Range", "bytes=" + 0 + "-");
-//            final int responseCode = httpConnection.getResponseCode();
-//            if (responseCode == HttpURLConnection.HTTP_OK) {
-//                parseResponse(httpConnection, false);
-//            } else if (responseCode == HttpURLConnection.HTTP_PARTIAL) {
-//                parseResponse(httpConnection, true);
-//            } else {
-//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
-//            }
-//        } catch (ProtocolException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Protocol error", e);
-//        } catch (IOException e) {
-//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "IO error", e);
-//        } finally {
-//            if (httpConnection != null) {
-//                httpConnection.disconnect();
-//            }
-//        }
-//    }
-
     private void executeConnection() throws DownloadException {
         mStartTime = System.currentTimeMillis();
-
-
-        OkHttpClient okHttpClient = OkhttpUtil.getOkHttpClient();
-
-
-        Request request = new Request.Builder().url(mUri).addHeader("Range", "bytes=" + 0 + "-").build();
-        Response response = null;
-
+        HttpURLConnection httpConnection = null;
+        final URL url;
         try {
-            response = okHttpClient.newCall(request).execute();
-            if (response == null) {
-                throw new DownloadException(DownloadStatus.STATUS_FAILED, "response==null");
-
-            }
-
-            final int responseCode = response.code();
-
+            url = new URL(mUri);
+        } catch (MalformedURLException e) {
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
+        }
+        try {
+            httpConnection = (HttpURLConnection) url.openConnection();
+            httpConnection.setConnectTimeout(Constants.HTTP.CONNECT_TIME_OUT);
+            httpConnection.setReadTimeout(Constants.HTTP.READ_TIME_OUT);
+            httpConnection.setRequestMethod(Constants.HTTP.GET);
+            httpConnection.setRequestProperty("Range", "bytes=" + 0 + "-");
+            final int responseCode = httpConnection.getResponseCode();
             if (responseCode == HttpURLConnection.HTTP_OK) {
-                parseResponse(response, false);
+                parseResponse(httpConnection, false);
             } else if (responseCode == HttpURLConnection.HTTP_PARTIAL) {
-                parseResponse(response, true);
+                parseResponse(httpConnection, true);
             } else {
                 throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
             }
-
-
+        } catch (ProtocolException e) {
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Protocol error", e);
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "IO error", e);
+        } finally {
+            if (httpConnection != null) {
+                httpConnection.disconnect();
+            }
         }
-
-
     }
+
+//    private void executeConnection() throws DownloadException {
+//        mStartTime = System.currentTimeMillis();
+//
+//
+//        OkHttpClient okHttpClient = OkhttpUtil.getOkHttpClient();
+//
+//
+//        Request request = new Request.Builder().url(mUri).addHeader("Range", "bytes=" + 0 + "-").build();
+//        Response response = null;
+//
+//        try {
+//            response = okHttpClient.newCall(request).execute();
+//            if (response == null) {
+//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "response==null");
+//
+//            }
+//
+//            final int responseCode = response.code();
+//
+//            if (responseCode == HttpURLConnection.HTTP_OK) {
+//                parseResponse(response, false);
+//            } else if (responseCode == HttpURLConnection.HTTP_PARTIAL) {
+//                parseResponse(response, true);
+//            } else {
+//                throw new DownloadException(DownloadStatus.STATUS_FAILED, "UnSupported response code:" + responseCode);
+//            }
+//
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            throw new DownloadException(DownloadStatus.STATUS_FAILED, "Bad url.", e);
+//        }
+
+
+//    }
 
 
     private void executeOkhttpConnection() throws DownloadException {
@@ -142,15 +142,37 @@ public class ConnectTaskImpl implements ConnectTask {
 
     }
 
-//    private void parseResponse(HttpURLConnection httpConnection, boolean isAcceptRanges) throws DownloadException {
+    private void parseResponse(HttpURLConnection httpConnection, boolean isAcceptRanges) throws DownloadException {
+
+        final long length;
+        String contentLength = httpConnection.getHeaderField("Content-Length");
+        if (TextUtils.isEmpty(contentLength) || contentLength.equals("0") || contentLength.equals("-1")) {
+            length = httpConnection.getContentLength();
+        } else {
+            length = Long.parseLong(contentLength);
+        }
+
+        if (length <= 0) {
+            throw new DownloadException(DownloadStatus.STATUS_FAILED, "length <= 0");
+        }
+
+        if(checkCanceled())
+            return;
+
+
+        //Successful
+        mStatus = DownloadStatus.STATUS_CONNECTED;
+        final long timeDelta = System.currentTimeMillis() - mStartTime;
+        mOnConnectListener.onConnected(timeDelta, length, isAcceptRanges);
+    }
+
+
+//    private void parseResponse(Response response, boolean isAcceptRanges) throws DownloadException {
 //
-//        final long length;
-//        String contentLength = httpConnection.getHeaderField("Content-Length");
-//        if (TextUtils.isEmpty(contentLength) || contentLength.equals("0") || contentLength.equals("-1")) {
-//            length = httpConnection.getContentLength();
-//        } else {
-//            length = Long.parseLong(contentLength);
-//        }
+//
+//
+//        long length = Long.parseLong(response.header("Content-Length", "-1"));
+//
 //
 //        if (length <= 0) {
 //            throw new DownloadException(DownloadStatus.STATUS_FAILED, "length <= 0");
@@ -164,31 +186,22 @@ public class ConnectTaskImpl implements ConnectTask {
 //        mOnConnectListener.onConnected(timeDelta, length, isAcceptRanges);
 //    }
 
+//    private void checkCanceled() throws DownloadException {
+//        if (isCanceled()) {
+//            // cancel
+//            throw new DownloadException(DownloadStatus.STATUS_CANCELED, "Download paused!");
+//        }
+//    }
 
-    private void parseResponse(Response response, boolean isAcceptRanges) throws DownloadException {
-
-
-
-        long length = Long.parseLong(response.header("Content-Length", "-1"));
-
-
-        if (length <= 0) {
-            throw new DownloadException(DownloadStatus.STATUS_FAILED, "length <= 0");
-        }
-
-        checkCanceled();
-
-        //Successful
-        mStatus = DownloadStatus.STATUS_CONNECTED;
-        final long timeDelta = System.currentTimeMillis() - mStartTime;
-        mOnConnectListener.onConnected(timeDelta, length, isAcceptRanges);
-    }
-
-    private void checkCanceled() throws DownloadException {
+    private boolean checkCanceled() throws DownloadException {
         if (isCanceled()) {
             // cancel
-            throw new DownloadException(DownloadStatus.STATUS_CANCELED, "Download paused!");
+//            throw new DownloadException(DownloadStatus.STATUS_CANCELED, "Download paused!");
+
+            handleDownloadException(new DownloadException(DownloadStatus.STATUS_CANCELED, "Download paused!"));
+         return true;
         }
+        return false;
     }
 
     private void handleDownloadException(DownloadException e) {

@@ -198,7 +198,25 @@ public class BitmapUtil {
         return intent;
     }
 
-    public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+    public static boolean isBitmap(String filePath) {
+
+        BitmapFactory.Options options = new BitmapFactory.Options();
+
+        options.inJustDecodeBounds =true;
+
+        BitmapFactory.decodeFile(filePath,options);
+
+        if (options.outWidth<=0||options.outHeight<=0){
+
+            return false;
+        }else{
+
+            return true;
+        }
+
+    }
+
+    public static int calculateInSampleSize(BitmapFactory.Options options, float reqWidth, float reqHeight) {
         int h = options.outHeight;
         int w = options.outWidth;
         int inSampleSize = 0;
@@ -208,6 +226,8 @@ public class BitmapUtil {
             inSampleSize = (int) Math.min(ratioH, ratioW);
         }
         inSampleSize = Math.max(1, inSampleSize);
+        LogUtil.getInstance().d("reqWidth:"+reqWidth+";reqHeight"+reqHeight+";inSampleSize"+inSampleSize);
+
         return inSampleSize;
     }
 
